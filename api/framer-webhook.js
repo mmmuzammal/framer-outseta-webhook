@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (body.webhook_secret !== process.env.FRAMER_WEBHOOK_SECRET)
     return res.status(401).json({ error: "invalid webhook secret" });
 
-  const OUTSETA_BASE = "https://api.outseta.com/api/v1";
+  const OUTSETA_BASE = "https://venax.outseta.com/api/v1";
   const AUTH = `Outseta ${process.env.OUTSETA_API_KEY}:${process.env.OUTSETA_API_SECRET}`;
 
   const email = body.email || body.Email;
