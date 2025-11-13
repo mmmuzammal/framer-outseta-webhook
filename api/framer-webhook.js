@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -7,25 +10,21 @@ export default async function handler(req, res) {
 
   // Outseta Base URL and Auth
   const OUTSETA_BASE = "https://venax.outseta.com/api/v1";
-  // ✅ Use Outseta token-style auth (not Basic)
   const AUTH = `Outseta ${process.env.OUTSETA_API_KEY}:${process.env.OUTSETA_API_SECRET}`;
 
-  // Extract form data from Framer
-  const email = body.email || body.Email;
-  const firstName = body.firstName || body.FirstName || "";
-  const lastName = body.lastName || body.LastName || "";
-  const plan = body.plan || "";
-  const term = body.term || "Monthly";
-  const newsletter =
-    body.newsletterOptIn === "true" || body.newsletter === "on";
+  // Frontend fields (German labels accepted)
+  const contactPerson = ( body.Ansprechpartner || "").toString().trim();
+  const email = (body.email || body.Email || "").toString().trim();
+  const phone = ( body.phone || body.phoneNumber || body.telephone || body.Telefonnummer || "").toString().trim();
+  const callbackWindow = (body.callbackWindow || body.rueckrufzeitraum || body.Rueckrufzeitraum || "").toString().trim();
+  const message = (body.message || body.notes || body.IhrAnliegen || body.IhrAnliegenText || "").toString().trim();
 
   console.log("📩 Incoming Framer data:", {
+    contactPerson,
     email,
-    firstName,
-    lastName,
-    plan,
-    term,
-    newsletter,
+    phone,
+    callbackWindow,
+    message,
   });
 
   // Safe fetch wrapper
@@ -50,7 +49,35 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ Create or update Person
+    // Basic validation: require contact person and at least email or phone
+    if (!contactPerson) {
+      return res.status(400).json({ error: "contactPerson is required" });
+    }
+    if (!email && !phone) {
+      return res.status(400).json({ error: "email or phone is required" });
+    }
+
+    // Persist submission locally
+    try {
+      const dataDir = path.join(process.cwd(), "data");
+      fs.mkdirSync(dataDir, { recursive: true });
+      const file = path.join(dataDir, "submissions.jsonl");
+      const submission = {
+        timestamp: new Date().toISOString(),
+        contactPerson,
+        email: email || null,
+        phone: phone || null,
+        callbackWindow: callbackWindow || null,
+        message: message || null,
+        rawBody: body,
+      };
+      fs.appendFileSync(file, JSON.stringify(submission) + "\n", "utf8");
+      console.log("💾 Saved submission to:", file);
+    } catch (err) {
+      console.error("⚠️ Failed to persist submission:", err);
+    }
+
+    // 1️⃣ Create or update Person in Outseta
     const person = await safeFetch(`${OUTSETA_BASE}/crm/people`, {
       method: "POST",
       headers: {
@@ -58,71 +85,13 @@ export default async function handler(req, res) {
         Authorization: AUTH,
       },
       body: JSON.stringify({
-        Email: email,
-        FirstName: firstName,
-        LastName: lastName,
+        Email: email || undefined,
+        FirstName: contactPerson,
+        PhoneNumber: phone || undefined,
+        Notes: message || undefined,
       }),
     });
-
-    // 2️⃣ Subscribe to newsletter (if opted in)
-    if (newsletter) {
-      await safeFetch(
-        `${OUTSETA_BASE}/email/lists/${process.env.NEWSLETTER_LIST_UID}/subscriptions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: AUTH,
-          },
-          body: JSON.stringify({
-            Email: email,
-            FirstName: firstName,
-            LastName: lastName,
-          }),
-        }
-      );
-    }
-
-    // 3️⃣ Create subscription if plan selected
-    if (plan === "base" || plan === "premium") {
-      const account = await safeFetch(`${OUTSETA_BASE}/crm/accounts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: AUTH,
-        },
-        body: JSON.stringify({
-          Name: `${firstName} ${lastName}`,
-        }),
-      });
-
-      const planUid =
-        plan === "base"
-          ? process.env.BASE_PLAN_UID
-          : process.env.PREMIUM_PLAN_UID;
-
-      const subscription = await safeFetch(
-        `${OUTSETA_BASE}/billing/subscriptions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: AUTH,
-          },
-          body: JSON.stringify({
-            AccountUid: account.Uid,
-            PlanUid: planUid,
-            BillingFrequency: term,
-          }),
-        }
-      );
-
-      return res
-        .status(200)
-        .json({ ok: true, person, account, subscription });
-    }
-
-    // ✅ Default success if no plan selected
+    // ✅ Default success
     return res.status(200).json({ ok: true, person });
   } catch (err) {
     console.error("🔥 Webhook error:", err);
