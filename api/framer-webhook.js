@@ -4,9 +4,47 @@ import path from "path";
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const body = req.body || {};
-  if (body.webhook_secret !== process.env.FRAMER_WEBHOOK_SECRET)
+  // Debug: log headers and parsed body to Vercel logs to inspect Framer requests
+  console.log("🔎 req.headers:", req.headers);
+  console.log("🔎 req.body (parsed):", req.body);
+
+  // Support various ways Framer might send the secret: in body (webhook_secret | secret), headers, or query
+  let body = req.body || {};
+
+  // If body is a raw string (e.g., urlencoded) try to parse it so we can read webhook_secret
+  if (typeof body === "string") {
+    try {
+      // Try JSON first
+      body = JSON.parse(body);
+    } catch (e) {
+      // Fallback: try URLSearchParams for form-encoded bodies
+      try {
+        const params = new URLSearchParams(body);
+        const obj = {};
+        for (const [k, v] of params.entries()) obj[k] = v;
+        body = obj;
+      } catch (e2) {
+        // leave body as string if parsing fails
+      }
+    }
+  }
+
+  const receivedSecret = (
+    (body && (body.webhook_secret || body.secret)) ||
+    req.headers["x-webhook-secret"] ||
+    req.headers["x-framer-webhook-secret"] ||
+    req.headers["webhook-secret"] ||
+    req.query?.webhook_secret ||
+    req.query?.secret ||
+    ""
+  )?.toString?.().trim?.() || "";
+
+  console.log("🔐 Received secret present:", !!receivedSecret, "value:", receivedSecret ? "(hidden)" : "(none)");
+
+  if (receivedSecret !== process.env.FRAMER_WEBHOOK_SECRET) {
+    console.warn("🔒 Invalid webhook secret - rejecting request");
     return res.status(401).json({ error: "invalid webhook secret" });
+  }
 
   // Outseta Base URL and Auth
   const OUTSETA_BASE = "https://venax.outseta.com/api/v1";
