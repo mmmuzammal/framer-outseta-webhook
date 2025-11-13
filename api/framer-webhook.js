@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   // Outseta Base URL and Auth
   const OUTSETA_BASE = "https://venax.outseta.com/api/v1";
   // ✅ Use Outseta token-style auth (not Basic)
-  const AUTH = `Outseta ${process.env.OUTSETA_PUBLIC_KEY}:${process.env.OUTSETA_SECRET_KEY}`;
+  const AUTH = `Outseta ${process.env.OUTSETA_API_KEY}:${process.env.OUTSETA_API_SECRET}`;
 
   // Extract form data from Framer
   const email = body.email || body.Email;
