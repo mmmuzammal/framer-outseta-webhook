@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
   try {
     // Create/Update Person
-    const person = await safeFetch(`${OUTSETA_BASE}/people`, {
+    const person = await safeFetch(`${OUTSETA_BASE}/crm/people`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: AUTH },
       body: JSON.stringify({ Email: email, FirstName: firstName, LastName: lastName })
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
     // Newsletter
     if (newsletter) {
-      await safeFetch(`${OUTSETA_BASE}/marketing/lists/${process.env.NEWSLETTER_LIST_UID}/subscribers`, {
+      await safeFetch(`${OUTSETA_BASE}/email/lists/${process.env.NEWSLETTER_LIST_UID}/subscriptions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: AUTH },
         body: JSON.stringify({ Email: email, FirstName: firstName, LastName: lastName })
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     // Pricing Plans
     if (plan === "base" || plan === "premium") {
-      const account = await safeFetch(`${OUTSETA_BASE}/accounts`, {
+      const account = await safeFetch(`${OUTSETA_BASE}/crm/accounts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: AUTH },
         body: JSON.stringify({ Name: `${firstName} ${lastName}` })
