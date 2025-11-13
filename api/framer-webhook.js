@@ -6,59 +6,90 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "invalid webhook secret" });
 
   const OUTSETA_BASE = "https://venax.outseta.com/api/v1";
-  const AUTH = `Outseta ${process.env.OUTSETA_API_KEY}:${process.env.OUTSETA_API_SECRET}`;
+
+  // ✅ Use Basic Auth (Base64)
+  const AUTH = `Basic ${Buffer.from(
+    `${process.env.OUTSETA_API_KEY}:${process.env.OUTSETA_API_SECRET}`
+  ).toString("base64")}`;
 
   const email = body.email || body.Email;
   const firstName = body.firstName || body.FirstName || "";
   const lastName = body.lastName || body.LastName || "";
   const plan = body.plan || "";
   const term = body.term || "Monthly";
-  const newsletter = body.newsletterOptIn === "true" || body.newsletter === "on";
+  const newsletter =
+    body.newsletterOptIn === "true" || body.newsletter === "on";
 
   async function safeFetch(url, options) {
     const resp = await fetch(url, options);
     const text = await resp.text();
     let json;
-    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { raw: text };
+    }
+
     if (!resp.ok) {
       console.error("Outseta error", resp.status, json);
-      throw new Error(`Outseta API error: ${resp.status}`);
+      throw new Error(`Outseta API error: ${resp.status} - ${text}`);
     }
     return json;
   }
 
   try {
-    // Create/Update Person
+    // ✅ Create/Update Person
     const person = await safeFetch(`${OUTSETA_BASE}/crm/people`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: AUTH },
-      body: JSON.stringify({ Email: email, FirstName: firstName, LastName: lastName })
+      body: JSON.stringify({
+        Email: email,
+        FirstName: firstName,
+        LastName: lastName,
+      }),
     });
 
-    // Newsletter
+    // ✅ Newsletter Subscription
     if (newsletter) {
-      await safeFetch(`${OUTSETA_BASE}/email/lists/${process.env.NEWSLETTER_LIST_UID}/subscriptions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: AUTH },
-        body: JSON.stringify({ Email: email, FirstName: firstName, LastName: lastName })
-      });
+      await safeFetch(
+        `${OUTSETA_BASE}/email/lists/${process.env.NEWSLETTER_LIST_UID}/subscriptions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: AUTH },
+          body: JSON.stringify({
+            Email: email,
+            FirstName: firstName,
+            LastName: lastName,
+          }),
+        }
+      );
     }
 
-    // Pricing Plans
+    // ✅ Plan Handling
     if (plan === "base" || plan === "premium") {
       const account = await safeFetch(`${OUTSETA_BASE}/crm/accounts`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: AUTH },
-        body: JSON.stringify({ Name: `${firstName} ${lastName}` })
+        body: JSON.stringify({ Name: `${firstName} ${lastName}` }),
       });
 
-      const planUid = plan === "base" ? process.env.BASE_PLAN_UID : process.env.PREMIUM_PLAN_UID;
+      const planUid =
+        plan === "base"
+          ? process.env.BASE_PLAN_UID
+          : process.env.PREMIUM_PLAN_UID;
 
-      const subscription = await safeFetch(`${OUTSETA_BASE}/billing/subscriptions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: AUTH },
-        body: JSON.stringify({ AccountUid: account.Uid, PlanUid: planUid, BillingFrequency: term })
-      });
+      const subscription = await safeFetch(
+        `${OUTSETA_BASE}/billing/subscriptions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: AUTH },
+          body: JSON.stringify({
+            AccountUid: account.Uid,
+            PlanUid: planUid,
+            BillingFrequency: term,
+          }),
+        }
+      );
 
       return res.status(200).json({ ok: true, person, account, subscription });
     }
