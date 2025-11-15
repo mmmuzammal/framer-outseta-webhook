@@ -55,16 +55,15 @@ export default async function handler(req, res) {
     rawBody: body,
   });
 
-  // Skip secret validation for Framer webhooks if no secret is configured
+  // Skip secret validation for Framer webhooks (they don't support custom secrets)
   if (!isFramerWebhook && (!receivedSecret || receivedSecret !== expectedSecret)) {
     console.warn("🔒 Invalid webhook secret - rejecting request");
     return res.status(401).json({ error: "invalid webhook secret" });
   }
 
-  // For Framer webhooks, validate the expected secret if it's configured
-  if (isFramerWebhook && expectedSecret && receivedSecret !== expectedSecret) {
-    console.warn("🔒 Framer webhook secret mismatch - rejecting request");
-    return res.status(401).json({ error: "invalid framer webhook secret" });
+  // Framer webhooks are allowed without secret validation since they don't support it
+  if (isFramerWebhook) {
+    console.log("✅ Framer webhook detected - skipping secret validation");
   }
 
   // ------------------------------------------------------
