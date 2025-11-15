@@ -27,6 +27,10 @@ export default async function handler(req, res) {
   // ------------------------------------------------------
   // 2️⃣ SECRET EXTRACTION (robust + case-insensitive)
   // ------------------------------------------------------
+  // Check if this is a Framer webhook (they have specific headers)
+  const isFramerWebhook = req.headers['user-agent']?.includes('framer') || 
+                         req.headers['framer-webhook-submission-id'];
+
   const receivedSecret =
     (
       body.webhook_secret ||
@@ -45,13 +49,22 @@ export default async function handler(req, res) {
   console.log("🔐 DEBUG SECRETS:", {
     receivedSecret,
     expectedSecret,
+    isFramerWebhook,
+    userAgent: req.headers['user-agent'],
     headers: req.headers,
     rawBody: body,
   });
 
-  if (!receivedSecret || receivedSecret !== expectedSecret) {
+  // Skip secret validation for Framer webhooks if no secret is configured
+  if (!isFramerWebhook && (!receivedSecret || receivedSecret !== expectedSecret)) {
     console.warn("🔒 Invalid webhook secret - rejecting request");
     return res.status(401).json({ error: "invalid webhook secret" });
+  }
+
+  // For Framer webhooks, validate the expected secret if it's configured
+  if (isFramerWebhook && expectedSecret && receivedSecret !== expectedSecret) {
+    console.warn("🔒 Framer webhook secret mismatch - rejecting request");
+    return res.status(401).json({ error: "invalid framer webhook secret" });
   }
 
   // ------------------------------------------------------
@@ -63,7 +76,12 @@ export default async function handler(req, res) {
   // ------------------------------------------------------
   // 4️⃣ MAP FRONTEND FIELDS
   // ------------------------------------------------------
-  const contactPerson = (body.Ansprechpartner || body.contactPerson || "").trim();
+  const contactPerson = (
+    body.Ansprechperson || 
+    body.Ansprechpartner || 
+    body.contactPerson || 
+    ""
+  ).trim();
   const email = (body.email || body.Email || "").trim();
   const phone = (
     body.phone ||
@@ -76,6 +94,7 @@ export default async function handler(req, res) {
     body.callbackWindow ||
     body.rueckrufzeitraum ||
     body.Rueckrufzeitraum ||
+    body['Rückrufzeitraum'] ||
     ""
   ).trim();
   const message = (
@@ -83,6 +102,7 @@ export default async function handler(req, res) {
     body.notes ||
     body.IhrAnliegen ||
     body.IhrAnliegenText ||
+    body['Ihr Anliegen (optional)'] ||
     ""
   ).trim();
 
