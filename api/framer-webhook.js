@@ -176,6 +176,7 @@ export default async function handler(req, res) {
         Email: email || undefined,
         FirstName: contactPerson,
         PhoneNumber: phone || undefined,
+        Title: callbackWindow || undefined,
         Notes: message || undefined,
       }),
     });
