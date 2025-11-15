@@ -146,13 +146,9 @@ export default async function handler(req, res) {
     }
 
     // ------------------------------------------------------
-    // 7️⃣ PERSIST LOCALLY (non-blocking)
+    // 7️⃣ LOG SUBMISSION (for debugging)
     // ------------------------------------------------------
     try {
-      const dataDir = path.join(process.cwd(), "data");
-      await fs.promises.mkdir(dataDir, { recursive: true });
-
-      const file = path.join(dataDir, "submissions.jsonl");
       const record = {
         timestamp: new Date().toISOString(),
         contactPerson,
@@ -162,9 +158,9 @@ export default async function handler(req, res) {
         message: message || null,
         rawBody: body,
       };
-      await fs.promises.appendFile(file, JSON.stringify(record) + "\n");
+      console.log("💾 Submission record:", JSON.stringify(record));
     } catch (err) {
-      console.error("⚠️ Failed to persist submission:", err);
+      console.error("⚠️ Failed to log submission:", err);
     }
 
     // ------------------------------------------------------
